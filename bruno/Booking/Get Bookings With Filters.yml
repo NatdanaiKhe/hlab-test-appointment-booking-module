@@ -1,0 +1,28 @@
+info:
+  name: Get Bookings With Filters
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/booking"
+  query:
+    - name: doctorId
+      value: 1
+    - name: status
+      value: BOOKED
+    - name: patientId
+      value:
+    - name: departmentId
+      value:
+    - name: startDate
+      value:
+    - name: endDate
+      value:
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
