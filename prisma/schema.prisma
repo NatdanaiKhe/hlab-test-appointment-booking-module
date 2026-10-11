@@ -1,6 +1,91 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
+}
+
+enum AppointmentStatus {
+  BOOKED
+  CANCELLED
+  COMPLETED
+}
+
+model Department {
+  id           Int           @id @default(autoincrement())
+  name         String        @unique
+  doctors      Doctor[]
+  appointments Appointment[]
+}
+
+model Doctor {
+  id           Int              @id @default(autoincrement())
+  name         String
+  departmentId Int
+  department   Department       @relation(fields: [departmentId], references: [id])
+  schedules    DoctorSchedule[]
+  appointments Appointment[]
+}
+
+model DoctorSchedule {
+  id          Int     @id @default(autoincrement())
+  doctorId    Int
+  doctor      Doctor  @relation(fields: [doctorId], references: [id])
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  breakStart  String?
+  breakEnd    String?
+
+  @@unique([doctorId, dayOfWeek])
+}
+
+model AppointmentType {
+  id                Int           @id @default(autoincrement())
+  code              String        @unique
+  name              String
+  durationMin       Int
+  appointments      Appointment[]
+}
+model Patient {
+  id           Int           @id @default(autoincrement())
+  name         String
+  appointments Appointment[]
+}
+
+model Staff {
+  id                    Int           @id @default(autoincrement())
+  name                  String
+  createdAppointments   Appointment[] @relation("CreatedBy")
+  cancelledAppointments Appointment[] @relation("CancelledBy")
+}
+
+model Appointment {
+  id            Int               @id @default(autoincrement())
+  patientId     Int
+  patient       Patient           @relation(fields: [patientId], references: [id])
+  doctorId      Int
+  doctor        Doctor            @relation(fields: [doctorId], references: [id])
+  departmentId  Int
+  department    Department        @relation(fields: [departmentId], references: [id])
+
+  appointmentTypeId Int
+  appointmentType   AppointmentType @relation(fields: [appointmentTypeId], references: [id])
+  status        AppointmentStatus @default(BOOKED)
+  startAt       DateTime
+  endAt         DateTime
+  reason        String?
+
+  createdById   Int
+  createdBy     Staff             @relation("CreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime          @default(now())
+
+  cancelReason  String?
+  cancelledById Int?
+  cancelledBy   Staff?            @relation("CancelledBy", fields: [cancelledById], references: [id])
+  cancelledAt   DateTime?
+
+  @@index([doctorId, startAt])
+  @@index([patientId, startAt])
 }
