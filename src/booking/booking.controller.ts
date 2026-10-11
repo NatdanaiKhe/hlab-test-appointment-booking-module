@@ -12,6 +12,7 @@ import {
 import { BookingService } from './booking.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { QueryBookingDto } from './dto/query-booking.dto';
+import { UpdateBookingDto } from './dto/update-booking.dto';
 
 @Controller('booking')
 export class BookingController {
@@ -33,8 +34,11 @@ export class BookingController {
   }
 
   @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number) {
-    return this.bookingService.update(id);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateBookingDto: UpdateBookingDto,
+  ) {
+    return this.bookingService.update(id, updateBookingDto);
   }
 
   @Delete(':id')

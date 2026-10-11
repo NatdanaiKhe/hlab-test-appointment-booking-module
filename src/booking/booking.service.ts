@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AppointmentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { QueryBookingDto } from './dto/query-booking.dto';
+import { UpdateBookingDto } from './dto/update-booking.dto';
 
 @Injectable()
 export class BookingService {
@@ -76,8 +81,65 @@ export class BookingService {
     return appointment;
   }
 
-  async update(id: number) {
-    return `This action updates a #${id} booking`;
+  async update(id: number, updateDto: UpdateBookingDto) {
+    const existing = await this.prisma.appointment.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Booking with ID ${id} not found`);
+    }
+
+    let status = updateDto.status;
+
+    if (
+      status === undefined &&
+      existing.status === AppointmentStatus.BOOKED &&
+      existing.endAt <= new Date()
+    ) {
+      status = AppointmentStatus.COMPLETED;
+    }
+
+    if (status !== undefined && status !== existing.status) {
+      const isTerminalStatus =
+        existing.status === AppointmentStatus.CANCELLED ||
+        existing.status === AppointmentStatus.COMPLETED;
+
+      if (isTerminalStatus) {
+        throw new BadRequestException(
+          `Cannot change status of an appointment that is already ${existing.status.toLowerCase()}`,
+        );
+      }
+    }
+
+    const data = {
+      ...(status !== undefined && { status }),
+      ...(status === AppointmentStatus.CANCELLED && {
+        cancelReason: updateDto.cancelReason ?? existing.cancelReason,
+        cancelledById:
+          updateDto.cancelledById !== undefined
+            ? updateDto.cancelledById
+            : existing.cancelledById,
+        cancelledAt: new Date(),
+      }),
+    };
+
+    return this.prisma.appointment.update({
+      where: { id },
+      data,
+      include: {
+        patient: true,
+        doctor: {
+          include: {
+            department: true,
+          },
+        },
+        department: true,
+        appointmentType: true,
+        createdBy: true,
+        cancelledBy: true,
+      },
+    });
   }
 
   remove(id: number) {
