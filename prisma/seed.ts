@@ -1,10 +1,9 @@
 import 'dotenv/config';
-import { PrismaClient, AppointmentStatus } from '@prisma/client';
+import { PrismaClient, AppointmentStatus, DayOfWeek } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
-
 
 // ---------- helpers ----------
 
@@ -68,21 +67,37 @@ async function main() {
     );
   }
 
-  // Doctor schedules (dayOfWeek: 0 = Sunday ... 6 = Saturday)
-  const mondayToFriday = [1, 2, 3, 4, 5];
-  const scheduleDays: number[][] = [
+  // Doctor schedules
+  const mondayToFriday = [
+    DayOfWeek.MONDAY,
+    DayOfWeek.TUESDAY,
+    DayOfWeek.WEDNESDAY,
+    DayOfWeek.THURSDAY,
+    DayOfWeek.FRIDAY,
+  ];
+  const scheduleDays: DayOfWeek[][] = [
     mondayToFriday, // Somchai
-    [1, 3, 5], // Naree
+    [DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY], // Naree
     mondayToFriday, // Pimchanok
-    [2, 4, 6], // Anan (includes Saturday)
-    [1, 2, 3, 4], // Kittisak
-    [2, 4, 5], // Supaporn
+    [DayOfWeek.TUESDAY, DayOfWeek.THURSDAY, DayOfWeek.SATURDAY], // Anan (includes Saturday)
+    [
+      DayOfWeek.MONDAY,
+      DayOfWeek.TUESDAY,
+      DayOfWeek.WEDNESDAY,
+      DayOfWeek.THURSDAY,
+    ], // Kittisak
+    [DayOfWeek.TUESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY], // Supaporn
     mondayToFriday, // Waraporn
-    [1, 3, 4, 5], // Thanakorn
+    [
+      DayOfWeek.MONDAY,
+      DayOfWeek.WEDNESDAY,
+      DayOfWeek.THURSDAY,
+      DayOfWeek.FRIDAY,
+    ], // Thanakorn
   ];
   for (let i = 0; i < doctors.length; i++) {
     for (const day of scheduleDays[i]) {
-      const halfDay = day === 6; // Saturday: morning only, no break
+      const halfDay = day === DayOfWeek.SATURDAY; // Saturday: morning only, no break
       await prisma.doctorSchedule.create({
         data: {
           doctorId: doctors[i].id,
