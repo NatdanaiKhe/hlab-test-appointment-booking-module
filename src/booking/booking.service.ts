@@ -11,10 +11,16 @@ import {
   CLINIC_TIMEZONE,
 } from './booking.constants';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import {
+  AvailableSlot,
+  FindAvailableSlotsDto,
+} from './dto/find-available-slots.dto';
 import { QueryBookingDto } from './dto/query-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import {
+  createClinicDateTime,
   formatMinutesToTime,
+  getClinicDateString,
   getClinicDayOfWeek,
   getClinicMinutes,
   hasTimeOverlap,
@@ -216,6 +222,170 @@ export class BookingService {
         startAt: 'asc',
       },
     });
+  }
+
+  async findAvailableSlots(
+    query: FindAvailableSlotsDto,
+  ): Promise<AvailableSlot[]> {
+    const [doctor, appointmentType] = await Promise.all([
+      this.prisma.doctor.findUnique({
+        where: { id: query.doctorId },
+      }),
+      this.prisma.appointmentType.findUnique({
+        where: { id: query.appointmentTypeId },
+      }),
+    ]);
+
+    if (!doctor) {
+      throw new NotFoundException(`Doctor with ID ${query.doctorId} not found`);
+    }
+    if (!appointmentType) {
+      throw new NotFoundException(
+        `AppointmentType with ID ${query.appointmentTypeId} not found`,
+      );
+    }
+
+    const parsedDate = new Date(query.date);
+    if (isNaN(parsedDate.getTime())) {
+      throw new BadRequestException('Invalid date format');
+    }
+    query.date = getClinicDateString(parsedDate, CLINIC_TIMEZONE);
+
+    const dayStart = createClinicDateTime(query.date, '00:00', CLINIC_TIMEZONE);
+    if (isNaN(dayStart.getTime())) {
+      throw new BadRequestException('Invalid date format');
+    }
+
+    if (getClinicDateString(dayStart, CLINIC_TIMEZONE) !== query.date) {
+      throw new BadRequestException('Invalid date format');
+    }
+
+    const dayEnd = createClinicDateTime(query.date, '23:59', CLINIC_TIMEZONE);
+
+    const now = new Date();
+    if (dayEnd <= now) {
+      return [];
+    }
+
+    const dayOfWeek = getClinicDayOfWeek(dayStart, CLINIC_TIMEZONE);
+
+    const schedule = await this.prisma.doctorSchedule.findUnique({
+      where: {
+        doctorId_dayOfWeek: {
+          doctorId: query.doctorId,
+          dayOfWeek,
+        },
+      },
+    });
+
+    if (!schedule) {
+      return [];
+    }
+
+    const existingAppointments = await this.prisma.appointment.findMany({
+      where: {
+        doctorId: query.doctorId,
+        status: { not: AppointmentStatus.CANCELLED },
+        startAt: { lt: dayEnd },
+        endAt: { gt: dayStart },
+      },
+      select: {
+        startAt: true,
+        endAt: true,
+      },
+    });
+
+    const activeBookedSlots = existingAppointments.map((appt) => ({
+      startMinutes: getClinicMinutes(appt.startAt, CLINIC_TIMEZONE),
+      endMinutes: getClinicMinutes(appt.endAt, CLINIC_TIMEZONE),
+    }));
+
+    const scheduleStartMinutes = parseTimeToMinutes(schedule.startTime);
+    const scheduleEndMinutes = parseTimeToMinutes(schedule.endTime);
+
+    const durationMin = appointmentType.durationMin;
+    const stepMin =
+      query.stepMin && query.stepMin > 0 ? query.stepMin : durationMin;
+
+    const hasBreak = Boolean(schedule.breakStart && schedule.breakEnd);
+    const breakStartMinutes = hasBreak
+      ? parseTimeToMinutes(schedule.breakStart!)
+      : -1;
+    const breakEndMinutes = hasBreak
+      ? parseTimeToMinutes(schedule.breakEnd!)
+      : -1;
+
+    const availableSlots: AvailableSlot[] = [];
+    let currentMinute = scheduleStartMinutes;
+
+    while (currentMinute + stepMin <= scheduleEndMinutes) {
+      if (
+        hasBreak &&
+        currentMinute >= breakStartMinutes &&
+        currentMinute < breakEndMinutes
+      ) {
+        currentMinute = breakEndMinutes;
+        continue;
+      }
+
+      const slotStartMinute = currentMinute;
+      const slotEndMinute = currentMinute + stepMin;
+
+      if (
+        hasBreak &&
+        slotStartMinute < breakStartMinutes &&
+        slotEndMinute > breakStartMinutes
+      ) {
+        currentMinute = breakEndMinutes;
+        continue;
+      }
+
+      const overlapsBreak =
+        hasBreak &&
+        hasTimeOverlap(
+          slotStartMinute,
+          slotEndMinute,
+          breakStartMinutes,
+          breakEndMinutes,
+        );
+
+      const overlapsExisting = activeBookedSlots.some((busy) =>
+        hasTimeOverlap(
+          slotStartMinute,
+          slotEndMinute,
+          busy.startMinutes,
+          busy.endMinutes,
+        ),
+      );
+
+      const startTimeStr = formatMinutesToTime(slotStartMinute);
+      const endTimeStr = formatMinutesToTime(slotEndMinute);
+      const slotStartAt = createClinicDateTime(
+        query.date,
+        startTimeStr,
+        CLINIC_TIMEZONE,
+      );
+      const slotEndAt = createClinicDateTime(
+        query.date,
+        endTimeStr,
+        CLINIC_TIMEZONE,
+      );
+
+      const isPast = slotStartAt <= now;
+
+      if (!overlapsBreak && !overlapsExisting && !isPast) {
+        availableSlots.push({
+          startAt: slotStartAt.toISOString(),
+          endAt: slotEndAt.toISOString(),
+          startTime: startTimeStr,
+          endTime: endTimeStr,
+        });
+      }
+
+      currentMinute += stepMin;
+    }
+
+    return availableSlots;
   }
 
   async findOne(id: number) {

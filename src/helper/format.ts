@@ -11,16 +11,6 @@ const DAY_MAP: Record<string, DayOfWeek> = {
   Sat: DayOfWeek.SATURDAY,
 };
 
-const JS_DAY_FALLBACK: DayOfWeek[] = [
-  DayOfWeek.SUNDAY,
-  DayOfWeek.MONDAY,
-  DayOfWeek.TUESDAY,
-  DayOfWeek.WEDNESDAY,
-  DayOfWeek.THURSDAY,
-  DayOfWeek.FRIDAY,
-  DayOfWeek.SATURDAY,
-];
-
 export function parseTimeToMinutes(timeStr: string): number {
   const [h, m] = timeStr.split(':').map(Number);
   return h * 60 + m;
@@ -41,7 +31,7 @@ export function getClinicDayOfWeek(
     weekday: 'short',
   }).format(date);
 
-  return DAY_MAP[weekdayStr] ?? JS_DAY_FALLBACK[date.getDay()];
+  return DAY_MAP[weekdayStr];
 }
 
 export function getClinicMinutes(
@@ -65,4 +55,38 @@ export function hasTimeOverlap(
   endB: number,
 ): boolean {
   return startA < endB && endA > startB;
+}
+
+export function getClinicDateString(
+  date: Date,
+  timezone: string = CLINIC_TIMEZONE,
+): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+export function createClinicDateTime(
+  dateStr: string,
+  timeStr: string,
+  timezone: string = CLINIC_TIMEZONE,
+): Date {
+  let ymd = dateStr;
+  if (dateStr.includes('T')) {
+    ymd = getClinicDateString(new Date(dateStr), timezone);
+  }
+
+  const tentative = new Date(`${ymd}T${timeStr}:00Z`);
+  const offsetPart = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    timeZoneName: 'longOffset',
+  })
+    .formatToParts(tentative)
+    .find((p) => p.type === 'timeZoneName')?.value;
+
+  const offset = offsetPart ? offsetPart.replace('GMT', '') : '+07:00';
+  return new Date(`${ymd}T${timeStr}:00${offset}`);
 }

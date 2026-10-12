@@ -1,6 +1,8 @@
 import { DayOfWeek } from '@prisma/client';
 import {
+  createClinicDateTime,
   formatMinutesToTime,
+  getClinicDateString,
   getClinicDayOfWeek,
   getClinicMinutes,
   hasTimeOverlap,
@@ -63,6 +65,27 @@ describe('format helpers', () => {
       expect(hasTimeOverlap(540, 600, 600, 660)).toBe(false); // touching boundaries
       expect(hasTimeOverlap(600, 660, 540, 600)).toBe(false); // touching boundaries
       expect(hasTimeOverlap(540, 570, 600, 630)).toBe(false); // separated
+    });
+  });
+
+  describe('getClinicDateString', () => {
+    it('should format date to YYYY-MM-DD in clinic timezone', () => {
+      // 2026-10-18T18:00:00Z is 01:00 on 2026-10-19 in Asia/Bangkok
+      const date = new Date('2026-10-18T18:00:00Z');
+      expect(getClinicDateString(date)).toBe('2026-10-19');
+    });
+  });
+
+  describe('createClinicDateTime', () => {
+    it('should create Date object matching clinic wall-clock time', () => {
+      const dt1 = createClinicDateTime('2026-10-19', '09:00');
+      expect(dt1.toISOString()).toBe('2026-10-19T02:00:00.000Z');
+
+      const dt2 = createClinicDateTime('2026-10-19', '16:30');
+      expect(dt2.toISOString()).toBe('2026-10-19T09:30:00.000Z');
+
+      const dt3 = createClinicDateTime('2026-10-19T00:00:00Z', '09:00');
+      expect(dt3.toISOString()).toBe('2026-10-19T02:00:00.000Z');
     });
   });
 });

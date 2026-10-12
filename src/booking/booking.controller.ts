@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { FindAvailableSlotsDto } from './dto/find-available-slots.dto';
 import { QueryBookingDto } from './dto/query-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 
@@ -26,6 +27,11 @@ export class BookingController {
   @Get()
   findAll(@Query() query: QueryBookingDto) {
     return this.bookingService.findAll(query);
+  }
+
+  @Get('available-slots')
+  findAvailableSlots(@Query() query: FindAvailableSlotsDto) {
+    return this.bookingService.findAvailableSlots(query);
   }
 
   @Get(':id')
