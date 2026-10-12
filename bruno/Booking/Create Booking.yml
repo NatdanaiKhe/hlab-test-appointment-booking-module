@@ -1,0 +1,27 @@
+info:
+  name: Create Booking
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/booking"
+  body:
+    type: json
+    data: |-
+      {
+        "patientId": 2,
+        "doctorId": 1,
+        "appointmentTypeId": 1,
+        "startAt": "2026-10-19T14:00:00+07:00",
+        "reason": "General check-up",
+        "createdById": 1
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
